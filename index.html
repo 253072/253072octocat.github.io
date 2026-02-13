@@ -1,1 +1,251 @@
-# r
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Grid</title>
+<style>
+body{
+    margin:0;
+    height:100vh;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    background:#111;
+    font-family:sans-serif;
+}
+
+.wrapper{
+    display:grid;
+    grid-template-columns: 180px 180px 180px;
+    grid-template-rows: 180px 180px 180px;
+}
+
+#board{
+    grid-column:2;
+    grid-row:2;
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    border:4px solid white;
+    width:180px;
+    height:180px;
+}
+
+.cell{
+    border:2px solid white;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    font-size:22px;
+    cursor:pointer;
+    user-select:none;
+    background:#222;
+    color:white;
+}
+
+.revealed{
+    background:#ddd;
+    color:black;
+}
+
+.arrow{
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    color:white;
+    font-size:28px;
+    cursor:pointer;
+    user-select:none;
+}
+
+.up{ grid-column:2; grid-row:1; }
+.down{ grid-column:2; grid-row:3; }
+.left{ grid-column:1; grid-row:2; }
+.right{ grid-column:3; grid-row:2; }
+
+.fade{
+    position:fixed;
+    inset:0;
+    background:black;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity 0.15s;
+}
+</style>
+</head>
+<body>
+
+<div class="wrapper">
+    <div class="arrow up" onclick="rotateY(-1)">▲</div>
+    <div class="arrow left" onclick="rotateX(-1)">◀</div>
+    <div id="board"></div>
+    <div class="arrow right" onclick="rotateX(1)">▶</div>
+    <div class="arrow down" onclick="rotateY(1)">▼</div>
+</div>
+
+<div id="fade" class="fade"></div>
+
+<script>
+const FACES=6;
+
+let cube=[];
+let firstClick=true;
+
+let orientation={
+    front:0, back:1,
+    left:2, right:3,
+    top:4, bottom:5
+};
+
+function init(){
+    cube=[];
+    firstClick=true;
+
+    for(let f=0;f<FACES;f++){
+        cube[f]=[];
+        for(let i=0;i<9;i++){
+            cube[f].push({bomb:false,revealed:false,count:0});
+        }
+    }
+
+    render();
+}
+
+function placeFixedBombs(){
+    // 立体的違和感が出る位置に固定
+    cube[0][0].bomb=true;
+    cube[1][8].bomb=true;
+    cube[2][2].bomb=true;
+    cube[3][6].bomb=true;
+    cube[4][4].bomb=true;
+}
+
+function idx(x,y){ return y*3+x; }
+function xy(i){ return {x:i%3,y:Math.floor(i/3)}; }
+
+function neighbors(f,i){
+    const {x,y}=xy(i);
+    let list=[];
+    for(let dx=-1;dx<=1;dx++){
+        for(let dy=-1;dy<=1;dy++){
+            if(dx===0&&dy===0)continue;
+            let nx=x+dx;
+            let ny=y+dy;
+            let nf=f;
+            if(nx<0){ nf=orientation.left; nx=2; }
+            if(nx>2){ nf=orientation.right; nx=0; }
+            if(ny<0){ nf=orientation.top; ny=2; }
+            if(ny>2){ nf=orientation.bottom; ny=0; }
+            list.push({f:nf,i:idx(nx,ny)});
+        }
+    }
+    return list;
+}
+
+function calcCounts(){
+    for(let f=0;f<6;f++){
+        for(let i=0;i<9;i++){
+            if(cube[f][i].bomb)continue;
+            cube[f][i].count=
+                neighbors(f,i)
+                .filter(n=>cube[n.f][n.i].bomb).length;
+        }
+    }
+}
+
+function render(){
+    const board=document.getElementById("board");
+    board.innerHTML="";
+    const face=orientation.front;
+
+    cube[face].forEach((c,i)=>{
+        let d=document.createElement("div");
+        d.className="cell";
+        if(c.revealed){
+            d.classList.add("revealed");
+            if(c.count>0){
+                d.textContent=c.count;
+            }
+        }
+        d.onclick=()=>reveal(face,i);
+        board.appendChild(d);
+    });
+}
+
+function reveal(f,i){
+    let c=cube[f][i];
+    if(c.revealed)return;
+
+    if(firstClick){
+        placeFixedBombs();
+        calcCounts();
+        firstClick=false;
+    }
+
+    c.revealed=true;
+
+    if(c.bomb){
+        blackout();
+        return;
+    }
+
+    if(c.count===0){
+        neighbors(f,i).forEach(n=>{
+            if(!cube[n.f][n.i].revealed)
+                reveal(n.f,n.i);
+        });
+    }
+
+    render();
+}
+
+function blackout(){
+    const fade=document.getElementById("fade");
+    fade.style.opacity=1;
+    setTimeout(()=>{
+        fade.style.opacity=0;
+        orientation={
+            front:0, back:1,
+            left:2, right:3,
+            top:4, bottom:5
+        };
+        init();
+    },150);
+}
+
+function rotateX(dir){
+    let o={...orientation};
+    if(dir===1){
+        orientation.front=o.left;
+        orientation.right=o.front;
+        orientation.back=o.right;
+        orientation.left=o.back;
+    }else{
+        orientation.front=o.right;
+        orientation.left=o.front;
+        orientation.back=o.left;
+        orientation.right=o.back;
+    }
+    render();
+}
+
+function rotateY(dir){
+    let o={...orientation};
+    if(dir===1){
+        orientation.front=o.top;
+        orientation.bottom=o.front;
+        orientation.back=o.bottom;
+        orientation.top=o.back;
+    }else{
+        orientation.front=o.bottom;
+        orientation.top=o.front;
+        orientation.back=o.top;
+        orientation.bottom=o.back;
+    }
+    render();
+}
+
+init();
+</script>
+</body>
+</html>
+
